@@ -1,0 +1,15 @@
+{
+  "name": "quest-out",
+  "local_port": 57435,
+  "entrypoint": "bun run dev",
+  "publish": {
+    "label": "quest-out",
+    "type": "http",
+    "entrypoint": "bun run prod",
+    "published_port": 57872,
+    "env": {
+      "NODE_ENV": "production",
+      "ZO_CLIENT_IDENTITY_TOKEN": "none"
+    }
+  }
+}
