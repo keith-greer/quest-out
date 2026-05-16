@@ -43,14 +43,21 @@ export default { fetch: app.fetch, port, idleTimeout: 255 };
  * - Falls back to `index.html` for any other GET so the SPA router can resolve the request.
  */
 function configureProduction(app: Hono) {
-  app.use("/assets/*", serveStatic({ root: "./dist" }));
-  app.get("/favicon.ico", (c) => c.redirect("/favicon.svg", 302));
+  // Serve static assets from dist/assets
+  app.use("/assets/*", async (c) => {
+    const path = c.req.path.replace("/assets/", "");
+    const file = Bun.file(`./dist/assets/${path}`);
+    if (await file.exists()) {
+      return new Response(file);
+    }
+    return c.text("Not found", 404);
+  });
+  
+  // Serve other static files from dist
   app.use(async (c, next) => {
-    if (c.req.method !== "GET") return next();
-
     const path = c.req.path;
-    if (path.startsWith("/api/") || path.startsWith("/assets/")) return next();
-
+    if (path.startsWith("/api/")) return next();
+    
     const file = Bun.file(`./dist${path}`);
     if (await file.exists()) {
       const stat = await file.stat();
@@ -58,8 +65,9 @@ function configureProduction(app: Hono) {
         return new Response(file);
       }
     }
-
-    return serveStatic({ path: "./dist/index.html" })(c, next);
+    
+    // Fallback to index.html for SPA
+    return new Response(Bun.file("./dist/index.html"));
   });
 }
 
