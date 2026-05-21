@@ -1,5 +1,6 @@
 import { Database } from "bun:sqlite";
-import { hashSync, compareSync, randomBytes } from "bcryptjs";
+import { hashSync, compareSync, genSaltSync } from "bcryptjs";
+import { randomBytes } from "node:crypto";
 
 const db = new Database("quest-out.db");
 

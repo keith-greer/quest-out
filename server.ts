@@ -21,6 +21,7 @@ import {
   cleanupExpiredSessions
 } from "./src/data/auth-db";
 import { achievements } from "./src/data/achievements";
+import { quests } from "./src/data/quests";
 
 // AI agents: read README.md for navigation and contribution guidance.
 type Mode = "development" | "production";
@@ -103,7 +104,7 @@ app.get("/api/auth/me", async (c) => {
 });
 
 // Quest completion routes
-app.post("/api/quests/:id/complete", async (c) => {
+app.post("/api/quest/complete", async (c) => {
   const sessionId = getCookie(c, "session");
   if (!sessionId) {
     return c.json({ error: "Not authenticated" }, 401);
@@ -114,22 +115,30 @@ app.post("/api/quests/:id/complete", async (c) => {
     return c.json({ error: "Session expired" }, 401);
   }
 
-  const questId = parseInt(c.req.param("id"), 10);
-  const { xpEarned, mood, journalNote } = await c.req.json();
+  const { quest_id, mood, journal_note } = await c.req.json();
+  const questId = parseInt(quest_id, 10);
+  const quest = quests.find(q => q.id === questId);
+
+  if (!quest) {
+    return c.json({ error: "Quest not found" }, 404);
+  }
 
   if (hasCompletedQuest(session.user_id, questId)) {
     return c.json({ error: "Quest already completed" }, 400);
   }
 
-  const completion = completeQuest(session.user_id, questId, xpEarned || 10, mood, journalNote);
+  // Get XP from quest data
+  const xpEarned = quest.xp || 100;
+
+  const completion = completeQuest(session.user_id, questId, xpEarned, mood, journal_note);
   if (!completion) {
     return c.json({ error: "Failed to complete quest" }, 500);
   }
 
-  // Award XP
-  const xpResult = addXP(session.user_id, xpEarned || 10);
+  const xpResult = addXP(session.user_id, xpEarned);
+  const user = getUserById(session.user_id);
 
-  return c.json({ completion, xpResult, user: getUserById(session.user_id) });
+  return c.json({ completion, xpResult, user, xpEarned });
 });
 
 app.get("/api/user/completions", async (c) => {
