@@ -30,6 +30,7 @@
     "@tailwindcss/vite": "^4.1.17",
     "@tanstack/react-table": "^8.21.3",
     "@vitejs/plugin-react-swc": "^4.2.2",
+    "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "hono": "^4.10.6",
@@ -50,6 +51,7 @@
     "zod": "^4.1.13"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^3.0.0",
     "@types/bun": "1.2.21",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",

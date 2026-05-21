@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { quests, categories } from "../data/quests";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { IconMapPin, IconClock } from "@tabler/icons-react";
+import { Button } from "@/components/ui/button";
+import { IconMapPin, IconClock, IconFlame, IconUser, IconLogout } from "@tabler/icons-react";
 
 const categoryColors: Record<string, string> = {
   "Dawn & Early Morning": "bg-amber-100 text-amber-800",
@@ -49,6 +50,33 @@ function QuestCard({ quest }: { quest: typeof quests[0] }) {
 export default function Home() {
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    checkAuth();
+  }, []);
+
+  const checkAuth = async () => {
+    try {
+      const res = await fetch("/api/auth/me", { credentials: "include" });
+      const data = await res.json();
+      setUser(data.user);
+    } catch (err) {
+      console.error("Auth check failed:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    await fetch("/api/auth/logout", {
+      method: "POST",
+      credentials: "include"
+    });
+    setUser(null);
+    window.location.reload();
+  };
 
   const filteredQuests = quests.filter((q) => {
     const matchesSearch =
@@ -65,6 +93,35 @@ export default function Home() {
           <div>
             <h1 className="text-xl font-bold tracking-tight">Quest Out</h1>
             <p className="text-sm text-muted-foreground">Get outside. Get a little wild.</p>
+          </div>
+          <div className="flex items-center gap-3">
+            {!loading && (
+              <>
+                {user ? (
+                  <div className="flex items-center gap-4">
+                    <Link to="/profile" className="flex items-center gap-2 text-sm">
+                      <IconFlame className="h-4 w-4 text-orange-500" />
+                      <span className="font-medium">{user.xp} XP</span>
+                      <span className="text-muted-foreground">Lvl {user.level}</span>
+                    </Link>
+                    <button
+                      onClick={handleLogout}
+                      className="rounded-full p-2 hover:bg-muted"
+                      title="Logout"
+                    >
+                      <IconLogout className="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <Link to="/auth">
+                    <Button size="sm" className="bg-orange-500 hover:bg-orange-600">
+                      <IconUser className="h-4 w-4 mr-1" />
+                      Login
+                    </Button>
+                  </Link>
+                )}
+              </>
+            )}
           </div>
         </div>
       </header>

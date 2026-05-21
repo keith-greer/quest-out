@@ -1,8 +1,26 @@
 import { serveStatic } from "hono/bun";
+import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import type { ViteDevServer } from "vite";
 import { createServer as createViteServer } from "vite";
 import config from "./zosite.json";
 import { Hono } from "hono";
+import {
+  createUser,
+  validateCredentials,
+  getUserById,
+  getSession,
+  deleteSession,
+  createSession,
+  addXP,
+  completeQuest,
+  getUserCompletions,
+  hasCompletedQuest,
+  getUserBadges,
+  awardBadge,
+  getXPProgress,
+  cleanupExpiredSessions
+} from "./src/data/auth-db";
+import { achievements } from "./src/data/achievements";
 
 // AI agents: read README.md for navigation and contribution guidance.
 type Mode = "development" | "production";
@@ -15,6 +33,209 @@ const mode: Mode =
  * Add any API routes here.
  */
 app.get("/api/hello-zo", (c) => c.json({ msg: "Hello from Zo" }));
+
+// Auth routes
+app.post("/api/auth/register", async (c) => {
+  const { email, username, password } = await c.req.json();
+  if (!email || !username || !password) {
+    return c.json({ error: "All fields required" }, 400);
+  }
+  if (password.length < 6) {
+    return c.json({ error: "Password must be at least 6 characters" }, 400);
+  }
+  const user = createUser(email, username, password);
+  if (!user) {
+    return c.json({ error: "Email or username already exists" }, 400);
+  }
+  const session = createSession(user.id);
+  setCookie(c, "session", session.id, {
+    httpOnly: true,
+    secure: true,
+    sameSite: "Lax",
+    maxAge: 30 * 24 * 60 * 60,
+    path: "/"
+  });
+  return c.json({ user });
+});
+
+app.post("/api/auth/login", async (c) => {
+  const { email, password } = await c.req.json();
+  if (!email || !password) {
+    return c.json({ error: "Email and password required" }, 400);
+  }
+  const user = validateCredentials(email, password);
+  if (!user) {
+    return c.json({ error: "Invalid credentials" }, 401);
+  }
+  const session = createSession(user.id);
+  setCookie(c, "session", session.id, {
+    httpOnly: true,
+    secure: true,
+    sameSite: "Lax",
+    maxAge: 30 * 24 * 60 * 60,
+    path: "/"
+  });
+  return c.json({ user });
+});
+
+app.post("/api/auth/logout", async (c) => {
+  const sessionId = getCookie(c, "session");
+  if (sessionId) {
+    deleteSession(sessionId);
+  }
+  deleteCookie(c, "session", { path: "/" });
+  return c.json({ success: true });
+});
+
+app.get("/api/auth/me", async (c) => {
+  const sessionId = getCookie(c, "session");
+  if (!sessionId) {
+    return c.json({ user: null });
+  }
+  cleanupExpiredSessions();
+  const session = getSession(sessionId);
+  if (!session) {
+    deleteCookie(c, "session", { path: "/" });
+    return c.json({ user: null });
+  }
+  const user = getUserById(session.user_id);
+  return c.json({ user });
+});
+
+// Quest completion routes
+app.post("/api/quests/:id/complete", async (c) => {
+  const sessionId = getCookie(c, "session");
+  if (!sessionId) {
+    return c.json({ error: "Not authenticated" }, 401);
+  }
+  cleanupExpiredSessions();
+  const session = getSession(sessionId);
+  if (!session) {
+    return c.json({ error: "Session expired" }, 401);
+  }
+
+  const questId = parseInt(c.req.param("id"), 10);
+  const { xpEarned, mood, journalNote } = await c.req.json();
+
+  if (hasCompletedQuest(session.user_id, questId)) {
+    return c.json({ error: "Quest already completed" }, 400);
+  }
+
+  const completion = completeQuest(session.user_id, questId, xpEarned || 10, mood, journalNote);
+  if (!completion) {
+    return c.json({ error: "Failed to complete quest" }, 500);
+  }
+
+  // Award XP
+  const xpResult = addXP(session.user_id, xpEarned || 10);
+
+  return c.json({ completion, xpResult, user: getUserById(session.user_id) });
+});
+
+app.get("/api/user/completions", async (c) => {
+  const sessionId = getCookie(c, "session");
+  if (!sessionId) {
+    return c.json({ error: "Not authenticated" }, 401);
+  }
+  cleanupExpiredSessions();
+  const session = getSession(sessionId);
+  if (!session) {
+    return c.json({ error: "Session expired" }, 401);
+  }
+
+  const completions = getUserCompletions(session.user_id);
+  return c.json({ completions });
+});
+
+// User profile with XP and badges
+app.get("/api/user/profile", async (c) => {
+  const sessionId = getCookie(c, "session");
+  if (!sessionId) {
+    return c.json({ error: "Not authenticated" }, 401);
+  }
+  cleanupExpiredSessions();
+  const session = getSession(sessionId);
+  if (!session) {
+    return c.json({ error: "Session expired" }, 401);
+  }
+
+  const user = getUserById(session.user_id);
+  if (!user) {
+    return c.json({ error: "User not found" }, 404);
+  }
+
+  const completions = getUserCompletions(session.user_id);
+  const badges = getUserBadges(session.user_id);
+  const xpProgress = getXPProgress(user.xp, user.level);
+
+  // Check for new achievements
+  const newBadges: string[] = [];
+  const questIds = completions.map(c => c.quest_id);
+
+  // Check quest completion badges
+  for (const achievement of achievements) {
+    if (achievement.category === "quest" && questIds.includes(parseInt(achievement.id.split("_")[1], 10))) {
+      if (!badges.find(b => b.badge_id === achievement.id)) {
+        awardBadge(session.user_id, achievement.id);
+        newBadges.push(achievement.id);
+      }
+    }
+  }
+
+  // Check XP milestones
+  const xpBadges = ["xp_100", "xp_500", "xp_1000", "xp_5000", "xp_10000"];
+  for (const badgeId of xpBadges) {
+    const achievement = achievements.find(a => a.id === badgeId);
+    if (achievement && user.xp >= parseInt(badgeId.split("_")[1], 10)) {
+      if (!badges.find(b => b.badge_id === badgeId)) {
+        awardBadge(session.user_id, badgeId);
+        newBadges.push(badgeId);
+      }
+    }
+  }
+
+  // Check level milestones
+  const levelBadges = ["level_5", "level_10", "level_25", "level_50", "level_100"];
+  for (const badgeId of levelBadges) {
+    const achievement = achievements.find(a => a.id === badgeId);
+    if (achievement && user.level >= parseInt(badgeId.split("_")[1], 10)) {
+      if (!badges.find(b => b.badge_id === badgeId)) {
+        awardBadge(session.user_id, badgeId);
+        newBadges.push(badgeId);
+      }
+    }
+  }
+
+  // Check quest count milestones
+  const questCountBadges = [
+    { id: "quests_5", count: 5 },
+    { id: "quests_10", count: 10 },
+    { id: "quests_25", count: 25 },
+    { id: "quests_45", count: 45 }
+  ];
+  for (const { id, count } of questCountBadges) {
+    const achievement = achievements.find(a => a.id === id);
+    if (achievement && completions.length >= count) {
+      if (!badges.find(b => b.badge_id === id)) {
+        awardBadge(session.user_id, id);
+        newBadges.push(id);
+      }
+    }
+  }
+
+  return c.json({
+    user,
+    xpProgress,
+    completionsCount: completions.length,
+    badgesCount: badges.length + newBadges.length,
+    recentBadges: newBadges
+  });
+});
+
+// Get all achievements
+app.get("/api/achievements", async (c) => {
+  return c.json({ achievements });
+});
 
 if (mode === "production") {
   configureProduction(app);
@@ -52,12 +273,12 @@ function configureProduction(app: Hono) {
     }
     return c.text("Not found", 404);
   });
-  
-  // Serve other static files from dist
+
+  // Serve other static files from dist (favicon, images, etc.)
   app.use(async (c, next) => {
     const path = c.req.path;
     if (path.startsWith("/api/")) return next();
-    
+
     const file = Bun.file(`./dist${path}`);
     if (await file.exists()) {
       const stat = await file.stat();
@@ -65,7 +286,7 @@ function configureProduction(app: Hono) {
         return new Response(file);
       }
     }
-    
+
     // Fallback to index.html for SPA
     return new Response(Bun.file("./dist/index.html"));
   });
