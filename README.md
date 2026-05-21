@@ -2,7 +2,34 @@ This file provides guidance when working with code in this repository. The READM
 
 # Project Notes
 
-<!-- Documentation for this specific project goes here. This will include both an articulation of what this project aims to accomplish as well as technical details about how it works. This means explaining the purpose of the project as a whole along with an overview of the design choices. -->
+## Overview
+
+Quest Out is a microadventure app with 45 outdoor quests, user accounts, XP rewards, and achievement badges.
+
+## Features
+
+### Authentication
+- Email/password registration and login
+- Session-based auth with secure HTTP-only cookies (30 day expiry)
+- SQLite database (`quest-out.db`) storing users, sessions, completions, and badges
+- Password hashing with bcryptjs
+
+### Gamification
+- Each quest has an XP value (75-1000 XP based on difficulty/duration)
+- Leveling system: each level requires `level * 100` XP
+- Completion achievements: individual badges for each of 45 quests
+- XP milestone badges: 100, 500, 1000, 5000, 10000 XP
+- Level milestone badges: level 5, 10, 25, 50, 100
+- Quest count badges: 5, 10, 25, 45 completions
+
+### User Profile
+- XP display with level and progress bar
+- Completed quests count with mood/journal tracking
+- Badge collection
+- Quest completion stores: XP earned, mood, journal note, completion timestamp
+
+### File Storage (TODO)
+- Photos, audio, and video uploads planned for Cloudinary integration
 
 ---
 
