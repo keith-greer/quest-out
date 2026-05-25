@@ -1,174 +1,223 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { quests } from "@/data/quests";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import HeaderMenu from "@/components/HeaderMenu";
+import { themes } from "@/components/theme-provider";
 
 export default function QuestDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const quest = quests.find((q) => q.id === Number(id));
+  const [user, setUser] = useState<{ username: string; avatar?: string } | null>(null);
   const [completed, setCompleted] = useState(false);
   const [showCompletion, setShowCompletion] = useState(false);
   const [mood, setMood] = useState("");
   const [journalNote, setJournalNote] = useState("");
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    fetchUser();
+    if (quest) {
+      checkCompletion();
+    }
+  }, [id]);
+
+  async function fetchUser() {
+    try {
+      const res = await fetch("/api/me");
+      if (res.ok) {
+        const data = await res.json();
+        setUser(data);
+      }
+    } catch {}
+  }
+
+  async function checkCompletion() {
+    try {
+      const res = await fetch(`/api/completed/${id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setCompleted(data.completed);
+      }
+    } catch {}
+  }
+
   if (!quest) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-[#1a1f16] to-background p-6">
-        <div className="mx-auto max-w-2xl">
-          <Link to="/" className="text-muted-foreground hover:text-foreground mb-8 inline-flex items-center gap-2">
-            ← Back to quests
-          </Link>
-          <div className="text-center py-20 text-muted-foreground">Quest not found</div>
+      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold mb-4">Quest not found</h1>
+          <Link to="/" className="text-emerald-400 hover:underline">Back to quests</Link>
         </div>
       </div>
     );
   }
 
-  const handleComplete = async () => {
+  async function handleComplete() {
+    if (!user) {
+      navigate("/auth");
+      return;
+    }
     setLoading(true);
     try {
-      const res = await fetch("/api/quest/complete", {
+      const res = await fetch("/api/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          quest_id: quest.id,
-          mood,
-          journal_note: journalNote
-        }),
+        body: JSON.stringify({ quest_id: quest.id, mood, journal_note: journalNote }),
       });
-
       if (res.ok) {
-        setCompleted(true);
         setShowCompletion(true);
-      } else if (res.status === 401) {
-        navigate("/auth");
+        setCompleted(true);
       }
-    } catch (err) {
-      console.error("Failed to complete quest:", err);
-    }
+    } catch {}
     setLoading(false);
-  };
+  }
 
-  const formatDuration = (minutes: number) => {
-    if (minutes < 60) return `${minutes}m`;
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
-  };
+  async function handleSignOut() {
+    try {
+      await fetch("/api/logout", { method: "POST" });
+      setUser(null);
+      window.location.reload();
+    } catch {}
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#1a1f16] to-background">
-      <div className="mx-auto max-w-2xl p-6">
-        <Link to="/" className="text-muted-foreground hover:text-foreground mb-8 inline-flex items-center gap-2 text-sm">
-          ← Back to quests
-        </Link>
-
-        <div className="mb-6">
-          <div className="flex items-center gap-3 mb-4">
-            <Badge variant="secondary" className="text-xs">
-              {quest.category}
-            </Badge>
-            {quest.solo ? (
-              <Badge variant="outline" className="text-xs">Solo</Badge>
+    <div className="min-h-screen bg-zinc-950 text-zinc-100">
+      {/* Header */}
+      <header className="sticky top-0 z-50 bg-zinc-900/95 backdrop-blur border-b border-zinc-800">
+        <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
+          <Link to="/" className="font-bold text-lg">Quest Out</Link>
+          <div className="flex items-center gap-3">
+            {user ? (
+              <HeaderMenu user={user} onSignOut={handleSignOut} />
             ) : (
-              <Badge variant="outline" className="text-xs">Social</Badge>
+              <Link to="/auth" className="text-sm text-zinc-400 hover:text-white">Sign in</Link>
             )}
           </div>
-
-          <h1 className="text-3xl font-bold text-[#f5f1e8] mb-3">{quest.title}</h1>
-          <p className="text-[#aaa39a] leading-relaxed">{quest.description}</p>
         </div>
+      </header>
 
-        <div className="bg-[#262820] rounded-xl p-5 mb-6 border border-[#3a3f32]">
-          <h3 className="text-sm font-medium text-[#8a8577] mb-3 uppercase tracking-wide">Quest Details</h3>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <div className="text-xs text-[#6a665a] mb-1">Duration</div>
-              <div className="text-[#d8d4c8] font-medium">{formatDuration(quest.duration_minutes)}</div>
-            </div>
-            <div>
-              <div className="text-xs text-[#6a665a] mb-1">XP Reward</div>
-              <div className="text-[#d8a657] font-bold text-lg">{quest.xp} XP</div>
-            </div>
-            <div>
-              <div className="text-xs text-[#6a665a] mb-1">Location</div>
-              <div className="text-[#d8d4c8]">{quest.location || "Anywhere"}</div>
-            </div>
-            <div>
-              <div className="text-xs text-[#6a665a] mb-1">Type</div>
-              <div className="text-[#d8d4c8]">{quest.solo ? "Solo" : "Social"}</div>
-            </div>
+      <main className="max-w-3xl mx-auto px-4 py-8">
+        {/* Quest header */}
+        <div className="mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Badge variant="secondary" className="bg-emerald-900/40 text-emerald-300 border-emerald-700">
+              {quest.category}
+            </Badge>
+            <Badge variant="secondary" className="bg-amber-900/40 text-amber-300 border-amber-700">
+              {quest.xp} XP
+            </Badge>
           </div>
-          {quest.equipment && quest.equipment !== "None" && (
-            <div className="mt-4 pt-4 border-t border-[#3a3f32]">
-              <div className="text-xs text-[#6a665a] mb-1">Equipment</div>
-              <div className="text-[#d8d4c8] text-sm">{quest.equipment}</div>
-            </div>
-          )}
+          <h1 className="text-3xl font-bold mb-2">{quest.title}</h1>
+          <div className="flex items-center gap-4 text-sm text-zinc-400">
+            <span className="flex items-center gap-1">
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              {quest.location}
+            </span>
+            <span className="flex items-center gap-1">
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+              {quest.duration_minutes} min
+            </span>
+            <span className="flex items-center gap-1">
+              {quest.solo ? "Solo" : "Social"}
+            </span>
+          </div>
         </div>
 
-        {!completed ? (
-          <Button
-            onClick={handleComplete}
-            disabled={loading}
-            className="w-full bg-[#d8a657] hover:bg-[#c4963f] text-[#1a1f16] font-semibold py-6 text-lg rounded-xl transition-colors"
-          >
-            {loading ? "Completing..." : `Complete Quest (+${quest.xp} XP)`}
-          </Button>
+        {/* Description */}
+        <section className="mb-8">
+          <p className="text-zinc-300 leading-relaxed">{quest.description}</p>
+        </section>
+
+        {/* How to do it */}
+        <section className="mb-8">
+          <h2 className="text-lg font-semibold mb-3">How to do it</h2>
+          <ul className="space-y-2">
+            {quest.how_to_steps.map((step, i) => (
+              <li key={i} className="flex gap-3 text-zinc-300">
+                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-zinc-800 flex items-center justify-center text-sm text-zinc-400">
+                  {i + 1}
+                </span>
+                {step}
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        {/* What to bring */}
+        <section className="mb-8">
+          <h2 className="text-lg font-semibold mb-3">What to bring</h2>
+          <div className="flex flex-wrap gap-2">
+            {quest.equipment.split(", ").map((item, i) => (
+              <span key={i} className="px-3 py-1 rounded-full bg-zinc-800 text-sm text-zinc-300">
+                {item}
+              </span>
+            ))}
+          </div>
+        </section>
+
+        {/* Safety note */}
+        <section className="mb-8 p-4 rounded-lg bg-amber-900/20 border border-amber-800">
+          <h2 className="text-lg font-semibold mb-2 text-amber-300">⚠️ Safety note</h2>
+          <p className="text-sm text-zinc-300">{quest.safety_note}</p>
+        </section>
+
+        {/* Completion */}
+        {completed || showCompletion ? (
+          <div className="text-center p-8 rounded-lg bg-emerald-900/20 border border-emerald-800">
+            <div className="text-4xl mb-4">✅</div>
+            <h2 className="text-xl font-bold text-emerald-300 mb-2">Quest Complete!</h2>
+            <p className="text-zinc-400">You earned <span className="text-amber-300 font-bold">+{quest.xp} XP</span></p>
+            {mood && <p className="text-sm text-zinc-500 mt-2">Mood: {mood}</p>}
+            <Link to="/" className="inline-block mt-4 text-emerald-400 hover:underline">
+              Browse more quests →
+            </Link>
+          </div>
         ) : (
-          <div className="text-center py-6 text-[#6a9a5a] bg-[#2a3520] rounded-xl border border-[#4a6a3a]">
-            Quest completed! ✓
-          </div>
-        )}
-
-        {showCompletion && completed && (
-          <div className="mt-6 bg-[#2a3520] rounded-xl p-5 border border-[#4a6a3a] text-center">
-            <div className="text-3xl font-bold text-[#8ac46a] mb-2">+{quest.xp} XP</div>
-            <p className="text-[#a8c88a] text-sm">Quest marked as complete!</p>
+          <div className="space-y-4">
             <button
-              onClick={() => navigate("/")}
-              className="mt-4 text-sm text-[#8ac46a] hover:underline"
+              onClick={handleComplete}
+              disabled={loading}
+              className="w-full py-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 font-semibold text-white transition-colors disabled:opacity-50"
             >
-              Continue exploring →
+              {loading ? "Completing..." : "Complete Quest"}
             </button>
-          </div>
-        )}
 
-        {!completed && !showCompletion && (
-          <div className="mt-6 bg-[#262820] rounded-xl p-5 border border-[#3a3f32]">
-            <h3 className="text-sm font-medium text-[#8a8577] mb-3 uppercase tracking-wide">How was it? (optional)</h3>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="mood">Mood</Label>
-                <input
-                  id="mood"
-                  type="text"
-                  placeholder="How did you feel?"
-                  value={mood}
-                  onChange={(e) => setMood(e.target.value)}
-                  className="w-full mt-1 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white"
-                />
-              </div>
-              <div>
-                <Label htmlFor="journal">Journal</Label>
-                <textarea
-                  id="journal"
-                  placeholder="Write about your experience..."
+            {user && !completed && (
+              <div className="space-y-3 p-4 rounded-lg bg-zinc-900 border border-zinc-800">
+                <Label>How did it feel? (optional)</Label>
+                <div className="flex gap-2">
+                  {["Amazing 😄", "Good 🙂", "Okay 😐", "Tough 😓", "Epic 🤩"].map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => setMood(m)}
+                      className={`px-3 py-1 rounded-full text-sm transition-colors ${mood === m ? "bg-emerald-700 text-white" : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"}`}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+                <Textarea
+                  placeholder="Write a quick journal note... (optional)"
                   value={journalNote}
                   onChange={(e) => setJournalNote(e.target.value)}
-                  className="w-full mt-1 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white min-h-[100px]"
+                  className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500"
                 />
               </div>
-            </div>
+            )}
+
+            {!user && (
+              <p className="text-center text-sm text-zinc-500">
+                <Link to="/auth" className="text-emerald-400 hover:underline">Sign in</Link> to track your progress and earn XP
+              </p>
+            )}
           </div>
         )}
-      </div>
+      </main>
     </div>
   );
 }

@@ -9,8 +9,7 @@
     "published_port": 57872,
     "env": {
       "NODE_ENV": "production",
-      "ZO_CLIENT_IDENTITY_TOKEN": "none",
-      "APP_URL": "https://your-quest-out-url.com"
+      "ZO_CLIENT_IDENTITY_TOKEN": "none"
     }
   }
 }

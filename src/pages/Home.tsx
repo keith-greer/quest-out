@@ -4,7 +4,8 @@ import { quests, categories } from "../data/quests";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { IconMapPin, IconClock, IconFlame, IconUser, IconLogout } from "@tabler/icons-react";
+import { IconMapPin, IconClock, IconUser } from "@tabler/icons-react";
+import HeaderMenu from "@/components/HeaderMenu";
 
 const categoryColors: Record<string, string> = {
   "Dawn & Early Morning": "bg-amber-100 text-amber-800",
@@ -98,20 +99,7 @@ export default function Home() {
             {!loading && (
               <>
                 {user ? (
-                  <div className="flex items-center gap-4">
-                    <Link to="/profile" className="flex items-center gap-2 text-sm">
-                      <IconFlame className="h-4 w-4 text-orange-500" />
-                      <span className="font-medium">{user.xp} XP</span>
-                      <span className="text-muted-foreground">Lvl {user.level}</span>
-                    </Link>
-                    <button
-                      onClick={handleLogout}
-                      className="rounded-full p-2 hover:bg-muted"
-                      title="Logout"
-                    >
-                      <IconLogout className="h-4 w-4" />
-                    </button>
-                  </div>
+                  <HeaderMenu user={user} onThemeChange={setTheme} />
                 ) : (
                   <Link to="/auth">
                     <Button size="sm" className="bg-orange-500 hover:bg-orange-600">
