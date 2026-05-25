@@ -4,6 +4,7 @@ import type { ViteDevServer } from "vite";
 import { createServer as createViteServer } from "vite";
 import config from "./zosite.json";
 import { Hono } from "hono";
+import { Resend } from "resend";
 import {
   createUser,
   validateCredentials,
@@ -99,9 +100,29 @@ app.post("/api/auth/forgot-password", async (c) => {
   if (!result.success) {
     return c.json({ error: result.error }, 404);
   }
-  // In production, you would send an email here with the reset link
-  // For now, we'll log it (or you could return it for testing)
-  console.log(`Password reset token for ${email}: ${result.token}`);
+
+  // Send reset email via Resend
+  const resend = new Resend(process.env.RESEND_API_KEY);
+  const resetUrl = `${process.env.APP_URL || "http://localhost:5173"}?reset=${result.token}`;
+  try {
+    await resend.emails.send({
+      from: "Quest Out <noreply@resend.dev>",
+      to: email,
+      subject: "Reset your Quest Out password",
+      html: `
+        <h1>Password Reset</h1>
+        <p>You requested a password reset for your Quest Out account.</p>
+        <p>Click the link below to reset your password:</p>
+        <a href="${resetUrl}">${resetUrl}</a>
+        <p>This link expires in 1 hour.</p>
+        <p>If you didn't request this, you can safely ignore this email.</p>
+      `,
+    });
+  } catch (err) {
+    console.error("Failed to send reset email:", err);
+    // Don't expose email failures to the client
+  }
+
   return c.json({ success: true, message: "If that email exists, a reset link has been sent." });
 });
 
