@@ -18,7 +18,9 @@ import {
   getUserBadges,
   awardBadge,
   getXPProgress,
-  cleanupExpiredSessions
+  cleanupExpiredSessions,
+  createPasswordResetToken,
+  resetPassword
 } from "./src/data/auth-db";
 import { achievements } from "./src/data/achievements";
 import { quests } from "./src/data/quests";
@@ -86,6 +88,36 @@ app.post("/api/auth/logout", async (c) => {
   }
   deleteCookie(c, "session", { path: "/" });
   return c.json({ success: true });
+});
+
+app.post("/api/auth/forgot-password", async (c) => {
+  const { email } = await c.req.json();
+  if (!email) {
+    return c.json({ error: "Email required" }, 400);
+  }
+  const result = createPasswordResetToken(email);
+  if (!result.success) {
+    return c.json({ error: result.error }, 404);
+  }
+  // In production, you would send an email here with the reset link
+  // For now, we'll log it (or you could return it for testing)
+  console.log(`Password reset token for ${email}: ${result.token}`);
+  return c.json({ success: true, message: "If that email exists, a reset link has been sent." });
+});
+
+app.post("/api/auth/reset-password", async (c) => {
+  const { token, password } = await c.req.json();
+  if (!token || !password) {
+    return c.json({ error: "Token and password required" }, 400);
+  }
+  if (password.length < 6) {
+    return c.json({ error: "Password must be at least 6 characters" }, 400);
+  }
+  const result = resetPassword(token, password);
+  if (!result.success) {
+    return c.json({ error: result.error }, 400);
+  }
+  return c.json({ success: true, message: "Password has been reset." });
 });
 
 app.get("/api/auth/me", async (c) => {

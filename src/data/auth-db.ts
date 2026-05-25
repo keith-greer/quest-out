@@ -54,6 +54,17 @@ db.run(`
   )
 `);
 
+db.run(`
+  CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    token TEXT UNIQUE NOT NULL,
+    expires_at TEXT NOT NULL,
+    used INTEGER DEFAULT 0,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  )
+`);
+
 export interface User {
   id: number;
   email: string;
@@ -243,6 +254,49 @@ export function getAllUserBadges(userId: number): string[] {
 // Cleanup expired sessions
 export function cleanupExpiredSessions(): void {
   db.prepare("DELETE FROM sessions WHERE expires_at < datetime('now')").run();
+}
+
+// Password reset functions
+export function createPasswordResetToken(email: string): { token: string; success: boolean; error?: string } {
+  const user = getUserByEmail(email);
+  if (!user) {
+    return { token: "", success: false, error: "email not found" };
+  }
+
+  const token = randomBytes(32).toString("hex");
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
+
+  db.prepare("INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES (?, ?, ?)").run(user.id, token, expiresAt);
+
+  return { token, success: true };
+}
+
+export function getValidResetToken(token: string): { userId: number; email: string } | null {
+  const result = db.prepare(`
+    SELECT u.id as user_id, u.email
+    FROM password_reset_tokens t
+    JOIN users u ON u.id = t.user_id
+    WHERE t.token = ? AND t.expires_at > datetime('now') AND t.used = 0
+  `).get(token) as { user_id: number; email: string } | undefined;
+
+  return result ? { userId: result.user_id, email: result.email } : null;
+}
+
+export function markResetTokenUsed(token: string): void {
+  db.prepare("UPDATE password_reset_tokens SET used = 1 WHERE token = ?").run(token);
+}
+
+export function resetPassword(token: string, newPassword: string): { success: boolean; error?: string } {
+  const tokenData = getValidResetToken(token);
+  if (!tokenData) {
+    return { success: false, error: "Invalid or expired reset token" };
+  }
+
+  const password_hash = hashSync(newPassword, 10);
+  db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(password_hash, tokenData.userId);
+  markResetTokenUsed(token);
+
+  return { success: true };
 }
 
 export { db };

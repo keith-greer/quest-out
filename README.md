@@ -13,6 +13,7 @@ Quest Out is a microadventure app with 45 outdoor quests, user accounts, XP rewa
 - Session-based auth with secure HTTP-only cookies (30 day expiry)
 - SQLite database (`quest-out.db`) storing users, sessions, completions, and badges
 - Password hashing with bcryptjs
+- Password reset with email token (1-hour expiry)
 
 ### Gamification
 - Each quest has an XP value (75-1000 XP based on difficulty/duration)
