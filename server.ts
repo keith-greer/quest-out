@@ -54,7 +54,7 @@ app.post("/api/auth/register", async (c) => {
   const session = createSession(user.id);
   setCookie(c, "session", session.id, {
     httpOnly: true,
-    secure: true,
+    secure: false, // Disabled for HTTP tunnel/CF connections
     sameSite: "Lax",
     maxAge: 30 * 24 * 60 * 60,
     path: "/"
