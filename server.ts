@@ -340,6 +340,7 @@ function configureProduction(app: Hono) {
   app.use(async (c, next) => {
     const path = c.req.path;
     if (path.startsWith("/api/")) return next();
+    if (path.startsWith("/assets/")) return next();
 
     const file = Bun.file(`./dist${path}`);
     if (await file.exists()) {

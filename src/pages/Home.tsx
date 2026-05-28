@@ -76,7 +76,7 @@ export default function Home() {
       credentials: "include"
     });
     setUser(null);
-    window.location.reload();
+    window.location.href = "/auth";
   };
 
   const filteredQuests = quests.filter((q) => {
@@ -99,7 +99,7 @@ export default function Home() {
             {!loading && (
               <>
                 {user ? (
-                  <HeaderMenu user={user} onThemeChange={setTheme} />
+                  <HeaderMenu user={user} onSignOut={handleLogout} />
                 ) : (
                   <Link to="/auth">
                     <Button size="sm" className="bg-orange-500 hover:bg-orange-600">
