@@ -59,9 +59,8 @@ export default function Auth() {
         return;
       }
 
-      // Redirect to home on success
+      // Redirect to home on success - let React Router handle it, auth state will update via useEffect
       navigate("/");
-      window.location.reload();
     } catch (err) {
       setError("Network error. Please try again.");
       setLoading(false);
